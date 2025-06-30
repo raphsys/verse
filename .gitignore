@@ -1,0 +1,22 @@
+# Environnements virtuels
+venv/
+.env/
+__pycache__/
+*.pyc
+
+# Data & modèles
+data/
+*.ckpt
+*.pth
+*.h5
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# IDEs
+.vscode/
+.idea/
