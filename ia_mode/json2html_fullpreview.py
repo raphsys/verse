@@ -3,53 +3,37 @@ import json
 from glob import glob
 from html import escape
 
-def css_style_from_block(block):
+def wysiwyg_phrase_overlays(block):
+    """Retourne les overlays HTML pour chaque phrase dans block['content']"""
     style = block.get("style", {})
-    css = []
-    if style.get("font_name"):
-        css.append(f"font-family:'{style['font_name']}'")
-    if style.get("font_size"):
-        css.append(f"font-size:{style['font_size']}pt")
-    if style.get("bold"):
-        css.append("font-weight:bold")
-    if style.get("italic"):
-        css.append("font-style:italic")
-    if style.get("underline"):
-        css.append("text-decoration:underline")
-    if style.get("color"):
-        css.append(f"color:rgb{style['color']}")
-    if block.get("alignment") in ("center", "right", "left", "justify"):
-        css.append(f"text-align:{block['alignment']}")
-    return "; ".join(css)
-
-def html_for_block(block):
-    style = css_style_from_block(block)
-    bbox = block.get("bbox", [0,0,100,30])
-    pos = (
-        f"position:absolute; left:{bbox[0]}px; top:{bbox[1]}px; "
-        f"width:{bbox[2]-bbox[0]}px; height:{bbox[3]-bbox[1]}px; "
-        f"padding:0 2px; overflow:hidden; {style} z-index:20;"
-    )
-    html = f'<div style="{pos}">'
-    # Puces/listes
     meta = block.get("list_meta", {})
-    if meta.get("list_type"):
-        html += f'<span style="font-weight:bold; font-size:1.1em;">{escape(meta["char"])} </span>'
-    # Formules
-    if block.get("formula_data", {}).get("is_formula"):
-        html += f'<span style="color:purple; font-weight:bold;">[FORMULE]</span> '
-    # Sigle
-    if block.get("sigle"):
-        html += f'<span style="color:darkred; font-weight:bold;">[SIGLE]</span> '
-    # Liens
-    if block.get("hyperlinks"):
-        for l in block["hyperlinks"]:
-            html += f'<a href="{escape(l["uri"])}" style="color:blue; text-decoration:underline;" target="_blank">🔗</a> '
-    # Sentences
-    # On affiche chaque phrase avec un <span> (meilleur placement/overflow)
-    for s in block.get("sentences", []):
-        html += f'<span style="display:block;">{escape(s)}</span>'
-    html += "</div>"
+    html = ""
+    for phrase in block.get("content", []):
+        prefix = ""
+        if meta.get("list_type"):
+            prefix += f'<span style="font-weight:bold;font-size:1.1em;">{escape(meta["char"])} </span>'
+        if phrase.get("is_formula"):
+            prefix += '<span style="color:purple; font-weight:bold;">[FORMULE]</span> '
+        if phrase.get("is_sigle"):
+            prefix += '<span style="color:darkred; font-weight:bold;">[SIGLE]</span> '
+        if phrase.get("links"):
+            for l in phrase["links"]:
+                prefix += f'<a href="{escape(l["uri"])}" style="color:blue; text-decoration:underline;" target="_blank">🔗</a> '
+        phrase_style = (
+            f"font-size:{style.get('font_size','11')}pt;"
+            f"font-family:{style.get('font_name','Arial')};"
+            f"{'font-weight:bold;' if style.get('bold') else ''}"
+            f"{'font-style:italic;' if style.get('italic') else ''}"
+            f"{'text-decoration:underline;' if style.get('underline') else ''}"
+            f"color:#222;"
+        )
+        for i, bbox in enumerate(phrase.get("bboxes", [])):
+            phrase_pos = (
+                f"position:absolute; left:{bbox[0]}px; top:{bbox[1]}px; "
+                f"width:{bbox[2]-bbox[0]}px; height:{bbox[3]-bbox[1]}px; "
+                f"padding:0 2px; background:rgba(255,255,255,0.87); z-index:30; {phrase_style}"
+            )
+            html += f'<div style="{phrase_pos}">{prefix}{escape(phrase.get("phrase",""))}</div>'
     return html
 
 def html_for_image(img, images_dir):
@@ -60,9 +44,8 @@ def html_for_image(img, images_dir):
     pos = (
         f"position:absolute; left:{bbox[0]}px; top:{bbox[1]}px; "
         f"width:{bbox[2]-bbox[0]}px; height:{bbox[3]-bbox[1]}px; "
-        f"object-fit:contain; z-index:10;"
+        f"object-fit:contain; z-index:15;"
     )
-    # Relatif au HTML généré
     img_rel = os.path.relpath(img_path, os.path.dirname(images_dir))
     return f'<img src="{escape(img_rel)}" style="{pos}"/>'
 
@@ -74,7 +57,7 @@ def html_for_table(table, htmltables_dir):
     pos = (
         f"position:absolute; left:{bbox[0]}px; top:{bbox[1]}px; "
         f"width:{bbox[2]-bbox[0]}px; height:{bbox[3]-bbox[1]}px; "
-        f"overflow:auto; background:#fff; border:1.5px solid #2aa; z-index:30;"
+        f"overflow:auto; background:#fff; border:1.5px solid #2aa; z-index:40;"
     )
     try:
         with open(html_path, encoding="utf8") as f:
@@ -96,28 +79,27 @@ def html_for_lines(lines):
     return html
 
 def page_div(page_num, page_json, images_dir, htmltables_dir, show_text=True, show_images=True, show_tables=True, show_lines=True):
-    # Fond = image de la page (extrait par extraction.py)
     page_img = os.path.join(images_dir, f"page_{page_num}.png")
     page_w = page_json.get("width", 1000)
     page_h = page_json.get("height", 1415)
     page_img_rel = os.path.relpath(page_img, os.path.dirname(images_dir))
     html = (
         f'<div class="page" id="page_{page_num}" style="display:none; width:{page_w}px; height:{page_h}px; '
-        f'background:url(\'{page_img_rel}\'); background-size:100% 100%; background-repeat:no-repeat;">\n'
+        f'background:url(\'{page_img_rel}\'); background-size:100% 100%; background-repeat:no-repeat; position:relative;">\n'
     )
-    # Blocs textes/phrases
+    # 1. PHRASES par bbox (et non bloc reconstitué)
     if show_text:
         for block in page_json.get("blocks", []):
-            html += html_for_block(block)
-    # Images
+            html += wysiwyg_phrase_overlays(block)
+    # 2. Images
     if show_images:
         for img in page_json.get("images", []):
             html += html_for_image(img, images_dir)
-    # Tables
+    # 3. Tables
     if show_tables:
         for table in page_json.get("tables", []):
             html += html_for_table(table, htmltables_dir)
-    # Lignes reconstituées (overlay)
+    # 4. Lignes reconstituées
     if show_lines:
         html += html_for_lines(page_json.get("lines_extracted", []))
     html += "\n</div>\n"
@@ -188,7 +170,7 @@ window.onload = function() {{
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Aperçu HTML WYSIWYG multi-pages complet (PDF-like)")
+    parser = argparse.ArgumentParser(description="Aperçu HTML WYSIWYG multi-pages complet (PDF-like, chaque phrase superposée à sa bbox)")
     parser.add_argument("json_dir", help="Dossier des JSON")
     parser.add_argument("--images_dir", help="Dossier des images de pages")
     parser.add_argument("--htmltables_dir", help="Dossier des HTML tables extraites")

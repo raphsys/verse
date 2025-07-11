@@ -7,10 +7,8 @@ from pdf2image import convert_from_path
 from PIL import Image
 import pytesseract
 import spacy
-
 import layoutparser as lp
 from typing import List, Dict, Any, Tuple
-
 from lxml import etree
 
 DEBUG = False
@@ -32,6 +30,72 @@ try:
     NER = spacy.load("fr_core_news_md")
 except Exception:
     NER = spacy.load("en_core_web_sm")
+
+# === PARAMETRES DE DETECTION DE FORMULES ===
+FORMULA_DETECTION_MODE = "strict"   # "strict" ou "flexible"
+DETECT_LATEX = True
+DETECT_MATHML = True
+DETECT_CHEM = True
+
+# === DETECTION DISTINCTE POUR CHAQUE TYPE DE FORMULE ===
+def is_latex_formula(text):
+    # Détecte une vraie formule LaTeX explicite (pas juste \sum ou \frac perdu dans du texte)
+    return bool(re.search(r'(\$[^\$]+\$|\\\(|\\\)|\\\[|\\\]|\\begin\{(equation|align|math)\})', text))
+
+def is_mathml_formula(text):
+    return bool(re.search(r'<math[\s>]|<mrow[\s>]', text))
+
+def is_chem_formula(text):
+    # Exemples : H2O, C6H12O6, NaCl, CH3COOH, (NH4)2SO4, Fe2(SO4)3, C17H19NO3 (avec ou sans parenthèses)
+    # Doit contenir AU MOINS deux éléments chimiques, et chaque groupe commence par majuscule
+    return bool(re.fullmatch(r'([A-Z][a-z]?[\d]*){2,}', text)) or \
+           bool(re.fullmatch(r'\(?[A-Z][a-z]?[\d]*\)?([\d\(\)A-Za-z]*)', text)) and sum(c.isdigit() for c in text) > 0
+
+def is_math_symbolic_formula(text, mode="strict"):
+    # Ratio de symboles math (hors ponctuation) dans texte
+    text = text.strip()
+    math_syms = "=_^{}[]<>|\\/+*-∑∫√≤≥≠≈∞±×÷"
+    n_symbols = sum(1 for c in text if c in math_syms)
+    ratio = n_symbols / len(text) if len(text) else 0
+    # Un mot d’au moins 6 caractères, 2 symboles math, 1 chiffre, peu de lettres, ou ratio > 0.3
+    if mode == "strict":
+        return (n_symbols >= 2 and any(char.isdigit() for char in text) and len(text) > 6) or ratio > 0.3
+    else:
+        return (n_symbols >= 1 and len(text) > 3) or ratio > 0.16
+
+def is_formula_zone(text, mode=None):
+    """
+    Détection fine et indépendante des types de formules.
+    - LaTeX : $...$, \(...\), \begin{equation}, etc.
+    - MathML : <math>, <mrow>...
+    - Chimie : H2O, C6H12O6, NaCl, etc.
+    - Symboles math (avec ratio/taille paramétrable)
+    """
+    text = text.strip()
+    if not text or len(text) < 3:
+        return False
+    mode = mode or FORMULA_DETECTION_MODE
+    # Exceptions : jamais taguer comme formule des mots connus (auteurs, titres, ISBN, sommaire, etc.)
+    for excl in ("CONTENTS", "ISBN", "MANNING", "SHELTER ISLAND", "PREFACE", "INDEX", "AUTHOR", "CHAPTER"):
+        if text.upper().startswith(excl):
+            return False
+    # LaTeX
+    if DETECT_LATEX and is_latex_formula(text):
+        return True
+    # MathML
+    if DETECT_MATHML and is_mathml_formula(text):
+        return True
+    # Chimie
+    if DETECT_CHEM and is_chem_formula(text):
+        return True
+    # Math symbols
+    if is_math_symbolic_formula(text, mode):
+        # Sauf si beaucoup de lettres et aucun symbole math
+        if sum(c.isalpha() for c in text) > 8 and sum(c in "=_^{}[]<>|\\/+*-∑∫√≤≥≠≈∞±×÷" for c in text) <= 2:
+            return False
+        return True
+    return False
+
 
 def make_output_dirs(pdf_path: str) -> Dict[str, str]:
     pdf_dir = os.path.dirname(os.path.abspath(pdf_path))
@@ -92,10 +156,9 @@ def detect_list_type(text: str) -> dict:
         return {"list_type": "numbered", "level": 1, "char": match.group(1)}
     return {"list_type": None, "level": 0, "char": ""}
 
-def is_formula_zone(text: str) -> bool:
-    if any(token in text for token in ["=", "+", "-", "∑", "∫", "lim", "sin", "cos", "tan", "√", "^", "_", "{", "}"]):
-        return True
-    return bool(re.match(r'^[\d\s\w\+\-\*/\^\=\(\)\[\]\{\}\\\.,;:<>√α-ωΑ-Ω∑∫∞≈≠±×÷°µ€$§%→←↔ΔΣλπρθΩ∞]+$', text.strip()))
+def is_sigle(text: str, known_sigles=None) -> bool:
+    known_sigles = known_sigles or set(["ONU", "OMS", "UNESCO", "CNAM", "WHO", "AI", "USA", "EU", "etc"])
+    return text.strip().upper() in known_sigles
 
 def extract_formula_latex(text: str) -> str:
     return f"${text.strip()}$" if text else ""
@@ -107,10 +170,6 @@ def extract_formula_mathml(text: str) -> str:
         mi = etree.SubElement(mrow, "mi")
         mi.text = c
     return etree.tostring(math_el, pretty_print=True, encoding="unicode")
-
-def is_sigle(text: str, known_sigles=None) -> bool:
-    known_sigles = known_sigles or set(["ONU", "OMS", "UNESCO", "CNAM", "WHO", "AI", "USA", "EU", "etc"])
-    return text.strip().upper() in known_sigles
 
 def extract_page_image(pdf_path: str, page_num: int, images_dir: str, dpi: int = 300) -> str:
     images = convert_from_path(pdf_path, dpi=dpi, first_page=page_num+1, last_page=page_num+1)
@@ -204,8 +263,6 @@ def extract_pdfplumber_features(page, images_dir: str) -> Dict[str, Any]:
     return result
 
 def extract_words_ocr(image_path, lang='eng+fra'):
-    from PIL import Image
-    import pytesseract
     image = Image.open(image_path)
     ocr_result = pytesseract.image_to_data(
         image, lang=lang, output_type=pytesseract.Output.DICT)
@@ -390,6 +447,7 @@ def fusion_blocks(
         formula_data = {}
         content = []
 
+        # --- Segmentation ultra-fine ---
         if block_words:
             sentences_struct = group_words_by_sentence_ultrafine(block_words)
             for s in sentences_struct:
@@ -611,7 +669,4 @@ def extract_all(
     log(f"\nExtraction complète : {json_dir}/page_X.json (et images/tables/formules associés)")
     log(f"Export global JSON/Pickle : {export_dir}/{base_export_name}.json et .pkl")
     log(f"Export lignes CSV/TXT : {export_dir}/lines_extracted.csv et .txt")
-
-# --- Utilisation ---
-# extract_all("mon_document.pdf", max_pages=5)
 
