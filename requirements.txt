@@ -1,0 +1,31 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+passlib[bcrypt]
+python-jose
+email-validator
+requests
+python-docx
+PyPDF2
+pytesseract
+pillow
+reportlab
+pymupdf
+pdfplumber
+pdfminer.six
+tabula-py
+camelot-py[cv]
+pytesseract
+# mathpix
+beautifulsoup4
+lxml
+pypandoc
+wikidata
+deep_translator
+libretranslate
+numpy
+opencv-python
+# Pour support LaTeX/math
+sympy
+

@@ -1,22 +1,159 @@
-# Environnements virtuels
-venv/
-.env/
+# ========== ENVIRONNEMENTS ET MODULES PYTHON ==========
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+*.log
 
-# Data & modèles
+# Environnements virtuels locaux
+.venv/
+venv/
+env/
+.venv.bak/
+.venv/
+ENV*/
+
+# Fichiers de configuration/cache outils Python
+.pip/
+.pip-wheel-metadata/
+.cache/
+.tox/
+.nox/
+.mypy_cache/
+.dmypy.json
+.pyre/
+pytest_cache/
+.pytest_cache/
+
+# Cython/pybind11 artifacts
+build/
+dist/
+*.spec
+
+# ========== BASES DE DONNÉES ET FICHIERS TEMPORAIRES ==========
+*.db
+*.sqlite3
+*.bak
+*.tmp
+*.temp
+*.old
+*.swp
+*.swo
+*~
+*.orig
+
+# ========== NOTEBOOKS & EXPORTS ==========
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# ========== FICHIERS ET DOSSIERS UTILISATEUR/EXPORT ==========
 data/
-*.ckpt
+export/
+datasets/
+uploads/
+uploaded_docs/
+app/uploaded_docs/
+backend/app/uploaded_docs/
+backend/app/uploads/
+ia_mode/models_pth/
+ia_mode/reviews/*.bak
+ia_mode/tests/output_test_docintelligence/
+ia_mode/tests/output_test_docintelligence/export/
+ia_mode/tests/output_test_docintelligence/htmltables/
+ia_mode/tests/output_test_docintelligence/images/
+ia_mode/tests/output_test_docintelligence/json/
+ia_mode/tests/output_test_docintelligence/mathml/
+ia_mode/tests/output_test_docintelligence/overlays/
+ia_mode/tests/output_test_docintelligence/tables/
 *.pth
-*.h5
+*.zip
 
-# OS files
+# ========== DETECTRON2 ET ARTEFACTS COMPILÉS ==========
+detectron2/build/
+detectron2/detectron2/_C.cpython-*.so
+detectron2/detectron2.egg-info/
+detectron2/detectron2/__pycache__/
+detectron2/detectron2/**/__pycache__/
+detectron2/detectron2/**/build/
+detectron2/detectron2/**/temp.linux-*
+detectron2/detectron2/**/lib.linux-*
+detectron2/detectron2/**/tools/
+detectron2/detectron2/**/tests/
+detectron2/detectron2/**/models/
+detectron2/detectron2/**/output/
+detectron2/detectron2/**/datasets/
+
+# Fichiers C/C++ et artefacts de build
+*.o
+*.obj
+*.a
+*.out
+*.mod
+*.dll
+*.exe
+
+# Fichiers/dirs générés par CMake ou Make
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+build/
+bin/
+
+# ========== FICHIERS ET CONFIGURATION FRONTEND ==========
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/.nuxt/
+frontend/.expo/
+frontend/.expo-shared/
+
+# ========== GÉNÉRAL ==========
 .DS_Store
 Thumbs.db
 
-# Logs
+# ========== LOGS & DIVERS ==========
 *.log
+*.gz
+*.tar
+*.tar.gz
 
-# IDEs
-.vscode/
-.idea/
+# ========== FICHIERS DE DOCS/STATIC TEMP ==========
+docs/_build/
+docs/.ipynb_checkpoints/
+docs/_static/
+docs/_autosummary/
+docs/*.log
+
+# ========== IGNOREZ VOS PROPRES GIT ET CONFIG ==========
+.git/
+.gitignore
+.gitmodules
+!.github/      # Garde les actions et config GitHub
+
+# ========== FICHIERS PERSONNELS TEMPORAIRES ==========
+*.secret
+*.env
+.env*
+.secret*
+*.key
+*.pem
+
+# ========== SPÉCIFIQUES IA_MODE ==========
+ia_mode/models_pth/
+ia_mode/models_pth/zip/
+ia_mode/reviews/*.bak
+ia_mode/tools/*.bak
+
+# ========== SCRIPTS SHELL TEMP ==========
+scripts/*.log
+
+# ========== AUTRES ==========
+# Ajoutez ici tout dossier/fichier que vous voulez systématiquement ignorer
+
+
